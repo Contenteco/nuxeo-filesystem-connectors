@@ -28,9 +28,25 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.common.utils.Base64;
+import org.nuxeo.ecm.core.api.ClientException;
+import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.platform.wi.backend.Backend;
 
 public class SessionCache implements Serializable {
+
+    private static final Log log = LogFactory.getLog(SessionCache.class);
+
+    /*
+     Session can't be invalidate if last access was less then this time.
+     Time in seconds. Default value.
+     */
+    private static final int DEFAULT_ACCESS_VALID_TIME = 30;
+
+    /*
+     Session will be invalidate if its lifetime more than this value.
+     Time in seconds. Default value.
+     */
+    private static final int DEFAULT_INVALID_LIFE_TIME = 20 * 60;
 
     private static final long serialVersionUID = 1L;
 
@@ -40,21 +56,26 @@ public class SessionCache implements Serializable {
 
     protected static final String QUOTE = "\"";
 
+    protected int accessValidTime = DEFAULT_ACCESS_VALID_TIME;
+
+    protected int invalidLifeTime = DEFAULT_INVALID_LIFE_TIME;
+
     private Map<String, WISession> map = new ConcurrentHashMap<String, WISession>();
 
     public WISession get(HttpServletRequest httpRequest) {
         String key = getKey(httpRequest);
-        return get(key);
+        WISession session = get(key);
+        return session;
     }
 
     public WISession get(String key) {
         if (StringUtils.isEmpty(key)) {
-            WISession session = new WISession(key);
+            WISession session = new WISession(key, accessValidTime, invalidLifeTime);
             return session;
         }
         WISession session = map.get(key);
         if (session == null) {
-            session = new WISession(key);
+            session = new WISession(key, accessValidTime, invalidLifeTime);
             put(session);
             return session;
         }
@@ -64,10 +85,16 @@ public class SessionCache implements Serializable {
             return session;
         } else {
             Backend backend = (Backend) session.getAttribute(WIRequestFilter.BACKEND_KEY);
+            CoreSession coreSession = null;
             if (backend != null) {
-                backend.destroy();
+                if (backend.isSessionAlive()) {
+                    coreSession = backend.getSession();
+                }
             }
-            session = new WISession(key);
+            session.reload();
+            if (coreSession != null) {
+                session.setAttribute(WISession.CORESESSION_KEY, coreSession);
+            }
             put(session);
             return session;
         }
@@ -77,42 +104,52 @@ public class SessionCache implements Serializable {
         map.put(session.getKey(), session);
     }
 
-    public void invalidateCache(){
-        for(WISession session : map.values()){
+    public void invalidateCache() {
+        log.warn("Catching invalidate WSS/WebDAV cache event.");
+        for (WISession session : map.values()) {
             session.invalid();
         }
     }
 
+    public void setAccessValidTime(int accessValidTime) {
+        this.accessValidTime = accessValidTime;
+    }
+
+    public void setInvalidLifeTime(int invalidLifeTime) {
+        this.invalidLifeTime = invalidLifeTime;
+    }
+
     private String getKey(HttpServletRequest httpRequest) {
-        HttpSession session = httpRequest.getSession(false);
-        if (session != null) {
-            return session.getId();
-        } else {
-            String header = httpRequest.getHeader("Authorization");
-            if (StringUtils.isEmpty(header)) {
-                return "";
-            }
-            String username = null;
-            if (header.toLowerCase().startsWith("digest")) {
-                int idx = header.indexOf(' ');
-                Map<String, String> headerMap = splitResponseParameters(header.substring(idx + 1));
-                username = headerMap.get("username");
-            } else if (header.toLowerCase().startsWith("basic")) {
-                int idx = header.indexOf(' ');
-                String b64userpassword = header.substring(idx + 1);
-                byte[] clearUp = Base64.decode(b64userpassword);
-                String userpassword = new String(clearUp);
-                String[] up = userpassword.split(":");
-                if (up.length == 2) {
-                    username = up[0];
-                }
-            }
-            if (StringUtils.isNotEmpty(username)) {
-                return username;
-            } else {
-                return "";
+        String key = "";
+        String header = httpRequest.getHeader("Authorization");
+        if (StringUtils.isEmpty(header)) {
+            return "";
+        }
+        String username = null;
+        if (header.toLowerCase().startsWith("digest")) {
+            int idx = header.indexOf(' ');
+            Map<String, String> headerMap = splitResponseParameters(header.substring(idx + 1));
+            username = headerMap.get("username");
+        } else if (header.toLowerCase().startsWith("basic")) {
+            int idx = header.indexOf(' ');
+            String b64userpassword = header.substring(idx + 1);
+            byte[] clearUp = Base64.decode(b64userpassword);
+            String userpassword = new String(clearUp);
+            String[] up = userpassword.split(":");
+            if (up.length == 2) {
+                username = up[0];
             }
         }
+        if (StringUtils.isNotEmpty(username)) {
+            key = username;
+        }
+        if (StringUtils.isEmpty(key)) {
+            HttpSession session = httpRequest.getSession(false);
+            if (session != null) {
+                key = session.getId();
+            }
+        }
+        return key;
     }
 
     private Map<String, String> splitResponseParameters(String auth) {

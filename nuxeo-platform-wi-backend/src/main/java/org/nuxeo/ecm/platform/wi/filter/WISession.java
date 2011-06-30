@@ -37,12 +37,24 @@ public class WISession implements Serializable {
 
     private long accessTime;
 
+    private long accessValidTime;
+
+    private long invalidLifeTime;
+
     private boolean invalid = false;
 
-    public WISession(String key) {
+    public WISession(String key, int accessValidTime, int invalidLifeTime) {
         this.creationTime = System.currentTimeMillis();
         access();
         this.key = key;
+        this.accessValidTime = accessValidTime * 1000L;
+        this.invalidLifeTime = invalidLifeTime * 1000L;
+    }
+
+    public void reload(){
+        this.creationTime = System.currentTimeMillis();
+        access();
+        attributes = new HashMap<String, Object>();
     }
 
     public void setAttribute(String key, Object value) {
@@ -75,7 +87,11 @@ public class WISession implements Serializable {
 
     public boolean isValid() {
         long time = System.currentTimeMillis();
-        if ((invalid && time > accessTime + 3 * 1000) || (time > creationTime + 20 * 60 * 1000 && time > accessTime + 2 * 60 * 1000) ) {
+        if ((invalid && time > accessTime + accessValidTime) ||
+                (invalidLifeTime != 0
+                        && time > creationTime + invalidLifeTime
+                        && time > accessTime + accessValidTime)) {
+            
             return false;
         } else {
             return true;
