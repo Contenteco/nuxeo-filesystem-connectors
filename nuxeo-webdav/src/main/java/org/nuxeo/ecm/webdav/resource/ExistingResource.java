@@ -21,10 +21,7 @@ package org.nuxeo.ecm.webdav.resource;
 
 import static javax.ws.rs.core.Response.Status.OK;
 
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.DELETE;
@@ -69,6 +66,7 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.PathRef;
 import org.nuxeo.ecm.webdav.Util;
 import org.nuxeo.ecm.webdav.backend.Backend;
+import org.nuxeo.ecm.webdav.backend.VirtualNode;
 import org.nuxeo.ecm.webdav.backend.WebDavBackend;
 
 /**
@@ -97,9 +95,13 @@ public class ExistingResource extends AbstractResource {
         }
 
         try {
-            backend.removeItem(doc.getRef());
-            backend.saveChanges();
-            return Response.status(204).build();
+            boolean result = backend.removeItem(doc.getRef());
+            if(result){
+                backend.saveChanges();
+                return Response.status(204).build();
+            } else {
+                return Response.status(404).build();
+            }
         } catch (ClientException e) {
             log.error("Can't remove item: " + doc.getPathAsString(), e);
             backend.discardChanges();
@@ -110,7 +112,11 @@ public class ExistingResource extends AbstractResource {
     @COPY
     public Response copy(@HeaderParam("Destination") String dest,
             @HeaderParam("Overwrite") String overwrite) throws Exception {
-        return copyOrMove("COPY", dest, overwrite);
+        try {
+            return copyOrMove("COPY", dest, overwrite);
+        } catch (Exception e) {
+            return Response.status(401).build();
+        }
     }
 
     @MOVE
@@ -120,7 +126,11 @@ public class ExistingResource extends AbstractResource {
             return Response.status(423).build();
         }
 
-        return copyOrMove("MOVE", dest, overwrite);
+        try {
+            return copyOrMove("MOVE", dest, overwrite);
+        } catch (Exception e) {
+            return Response.status(401).build();
+        }
     }
 
     private Response copyOrMove(String method,
@@ -135,7 +145,11 @@ public class ExistingResource extends AbstractResource {
         destination = URIUtil.decode(destination);
 
         WebDavBackend root = Backend.get("/", request);
-        Set<String> names = new HashSet<String>(root.getVirtualFolderNames());
+        List<VirtualNode> nodes = root.getVirtualNodes();
+        Set<String> names = new HashSet<String>();
+        for(VirtualNode node : nodes){
+            names.add(node.getName());
+        }
         Path destinationPath = new Path(destination);
         String[] segments = destinationPath.segments();
         int removeSegments = 0;
@@ -192,24 +206,6 @@ public class ExistingResource extends AbstractResource {
         if (backend.isLocked(doc.getRef()) && !backend.canUnlock(doc.getRef())) {
             return Response.status(423).build();
         }
-
-        /*
-         * JAXBContext jc = Util.getJaxbContext(); Unmarshaller u =
-         * jc.createUnmarshaller(); PropertyUpdate propertyUpdate; try {
-         * propertyUpdate = (PropertyUpdate)
-         * u.unmarshal(request.getInputStream()); } catch (JAXBException e) {
-         * return Response.status(400).build(); }
-         */
-        // Util.printAsXml(propertyUpdate);
-        /*
-         * List<RemoveOrSet> list = propertyUpdate.list();
-         *
-         * final List<PropStat> propStats = new ArrayList<PropStat>(); for
-         * (RemoveOrSet set : list) { Prop prop = set.getProp(); List<Object>
-         * properties = prop.getProperties(); for (Object property : properties)
-         * { PropStat propStat = new PropStat(new Prop(property), new
-         * Status(OK)); propStats.add(propStat); } }
-         */
 
         // @TODO: patch properties if need.
         // Fake proppatch response

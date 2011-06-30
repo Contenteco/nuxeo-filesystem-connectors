@@ -89,16 +89,16 @@ public class FileResource extends ExistingResource {
         }
 
         try {
-        Blob content = new StreamingBlob(new InputStreamSource(request.getInputStream()));
+            Blob content = new StreamingBlob(new InputStreamSource(request.getInputStream()));
             String contentType = request.getContentType();
             if (contentType == null) {
                 contentType = "application/octet-stream";
             }
             content.setMimeType(contentType);
-        content.setFilename(name);
+            content.setFilename(name);
 
             backend.updateDocument(doc, name, content);
-        return Response.created(new URI(URLEncoder.encode(path, "UTF8"))).build();
+            return Response.created(new URI(URLEncoder.encode(path, "UTF8"))).build();
         } catch (Exception e) {
             log.error("Error during PUT method execution", e);
             return Response.status(409).build();

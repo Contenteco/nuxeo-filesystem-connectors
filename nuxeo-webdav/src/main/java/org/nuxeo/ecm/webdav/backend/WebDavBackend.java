@@ -21,6 +21,7 @@ import org.nuxeo.ecm.core.api.*;
 
 import java.util.LinkedList;
 import java.util.List;
+import org.nuxeo.ecm.core.security.SecurityException;
 
 public interface WebDavBackend {
 
@@ -40,13 +41,11 @@ public interface WebDavBackend {
 
     Path parseLocation(String location);
 
-    DocumentModel resolveLocation(String location) throws ClientException;
+    boolean removeItem(String location) throws ClientException, SecurityException;
 
-    void removeItem(String location) throws ClientException;
+    boolean removeItem(DocumentRef ref) throws ClientException;
 
-    void removeItem(DocumentRef ref) throws ClientException;
-
-    void renameItem(DocumentModel source, String destinationName) throws ClientException;
+    boolean renameItem(DocumentModel source, String destinationName) throws ClientException;
 
     DocumentModel moveItem(DocumentModel source, PathRef targetParentRef) throws ClientException;
 
@@ -70,7 +69,7 @@ public interface WebDavBackend {
 
     String getDisplayName(DocumentModel doc);
 
-    LinkedList<String> getVirtualFolderNames() throws ClientException;
+    LinkedList<VirtualNode> getVirtualNodes() throws ClientException;
 
     boolean isVirtual();
 

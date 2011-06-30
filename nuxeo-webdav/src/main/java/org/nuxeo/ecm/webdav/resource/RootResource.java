@@ -27,6 +27,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.WebApplicationException;
@@ -46,10 +47,14 @@ import org.nuxeo.ecm.webdav.backend.WebDavBackend;
 
 import com.sun.jersey.spi.CloseableService;
 
+import java.util.Arrays;
+
 @Path("dav")
 public class RootResource {
 
     private static final Log log = LogFactory.getLog(RootResource.class);
+
+    private static final String ROOT_RESOURCE_PATH = "dav";
 
     private HttpServletRequest request;
 
@@ -61,7 +66,7 @@ public class RootResource {
 
     @GET
     @Produces("text/html")
-    public Object getRoot() throws Exception {
+    public Object getRoot(@Context UriInfo uriInfo) throws Exception {
         Object resource = findResource("");
         if (resource instanceof FolderResource) {
             return ((FolderResource) resource).get();
@@ -71,7 +76,7 @@ public class RootResource {
     }
 
     @OPTIONS
-    public Object getRootOptions() throws Exception {
+    public Object getRootOptions(@Context UriInfo uriInfo) throws Exception {
         Object resource = findResource("");
         if (resource instanceof FolderResource) {
             return ((FolderResource) resource).options();
@@ -93,7 +98,11 @@ public class RootResource {
     }
 
     @Path("{path:.+}")
-    public Object findResource(@PathParam("path") String path) throws Exception {
+    public Object findResource(@Context UriInfo uriInfo) throws Exception {
+        return findResource(getPath(uriInfo.getPath()));
+    }
+
+    private Object findResource(String path) throws Exception {
         path = new String(path.getBytes(), "UTF-8");
 
         WebDavBackend backend = Backend.get(path, request);
@@ -104,7 +113,7 @@ public class RootResource {
 
         if (backend.isVirtual()) {
             return new VirtualFolderResource(path, request,
-                    backend.getVirtualFolderNames());
+                    backend.getVirtualNodes());
         }
 
         DocumentModel doc = null;
@@ -130,6 +139,14 @@ public class RootResource {
         } else {
             return new FileResource(getDocumentPath(doc), doc, request, backend);
         }
+    }
+
+    private String getPath(String uri){
+        org.nuxeo.common.utils.Path path = new org.nuxeo.common.utils.Path(uri);
+        if(ROOT_RESOURCE_PATH.equals(path.segment(0))){
+            path = path.removeFirstSegments(1);
+        }
+        return path.toString();
     }
 
     private String getDocumentPath(DocumentModel source) throws ClientException {

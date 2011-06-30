@@ -34,10 +34,9 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
+import javax.ws.rs.WebApplicationException;
 
-import net.java.dev.webdav.core.jaxrs.xml.properties.IsCollection;
-import net.java.dev.webdav.core.jaxrs.xml.properties.IsFolder;
-import net.java.dev.webdav.core.jaxrs.xml.properties.IsHidden;
+import net.java.dev.webdav.core.jaxrs.xml.properties.*;
 import net.java.dev.webdav.jaxrs.methods.COPY;
 import net.java.dev.webdav.jaxrs.methods.LOCK;
 import net.java.dev.webdav.jaxrs.methods.MKCOL;
@@ -66,24 +65,29 @@ import net.java.dev.webdav.jaxrs.xml.properties.GetLastModified;
 import net.java.dev.webdav.jaxrs.xml.properties.LockDiscovery;
 import net.java.dev.webdav.jaxrs.xml.properties.SupportedLock;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.ClientException;
+import org.nuxeo.ecm.webdav.backend.VirtualNode;
 
 public class VirtualFolderResource extends AbstractResource {
 
-    private LinkedList<String> rootFolderNames;
+    private static final Log log = LogFactory.getLog(VirtualFolderResource.class);
+    private LinkedList<VirtualNode> rootFolderNodes;
 
-    public VirtualFolderResource(String path, HttpServletRequest request, LinkedList<String> rootFolderNames) throws Exception {
+    public VirtualFolderResource(String path, HttpServletRequest request,
+                                 LinkedList<VirtualNode> rootFolderNodes) throws Exception {
         super(path, request);
-        this.rootFolderNames = rootFolderNames;
+        this.rootFolderNodes = rootFolderNodes;
     }
 
     @GET
     @Produces("text/html")
     public String get() throws ClientException {
         StringBuilder sb = new StringBuilder();
-        sb.append("<html><body><p>Folder listing for " + path + ":</p>\n<ul>");
-        for (String name : rootFolderNames) {
-            sb.append("<li><a href='" + name + "'>" + name + "</a></li>\n");
+        sb.append("<html><body><p>Listing for " + path + ":</p>\n<ul>");
+        for (VirtualNode node : rootFolderNodes) {
+            sb.append("<li><a href='" + node.getName() + "'>" + node.getName() + "</a></li>\n");
         }
         sb.append("</ul></body>\n");
 
@@ -133,17 +137,21 @@ public class VirtualFolderResource extends AbstractResource {
                 = new ArrayList<net.java.dev.webdav.jaxrs.xml.elements.Response>();
         responses.add(response);
 
-        for (String name : rootFolderNames) {
+        for (VirtualNode node : rootFolderNodes) {
             lastModified = new Date();
             creationDate = new Date();
             PropStatBuilderExt props = new PropStatBuilderExt();
-            props.lastModified(lastModified).creationDate(creationDate).displayName(name).status(OK);
-            props.isCollection();
+            props.lastModified(lastModified).creationDate(creationDate).displayName(node.getName()).status(OK);
+            if (node.isFolder()) {
+                props.isCollection();
+            } else {
+                props.isResource(node.getSize(), node.getMimeType());
+            }
 
             PropStat found = props.build();
 
             net.java.dev.webdav.jaxrs.xml.elements.Response childResponse;
-            URI childUri = uriInfo.getRequestUriBuilder().path(name).build();
+            URI childUri = uriInfo.getRequestUriBuilder().path(node.getName()).build();
 
             childResponse = new net.java.dev.webdav.jaxrs.xml.elements.Response(
                         new HRef(childUri), null, null, null, found);
@@ -173,7 +181,7 @@ public class VirtualFolderResource extends AbstractResource {
 
     @PROPPATCH
     public Response proppatch() throws Exception {
-        return Response.status(401).build();
+        throw new WebApplicationException(Response.Status.NOT_FOUND);
     }
 
     @MKCOL
