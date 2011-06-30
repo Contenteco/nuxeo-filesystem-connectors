@@ -87,44 +87,31 @@ public class WSSFilter extends BaseWSSFilter implements Filter {
         WSSRequest request = new WSSRequest(httpRequest, config.getSiteName());
         WSSResponse response = null;
 
-        WSSBackend backend = Backend.get(request);
-
-        backend.begin();
-
         log.debug("Handling WSS call : " + httpRequest.getRequestURL().toString());
 
-        try {
-            if (FilterBindingConfig.FP_REQUEST_TYPE.equals(config.getRequestType())) {
-                FPRPCRequest fpRequest = new FPRPCRequest(httpRequest, config.getSiteName());
-                request = fpRequest;
-                response = new FPRPCResponse(httpResponse);
-                FPRPCRouter.handleFPRCPRequest(fpRequest, (FPRPCResponse) response, config);
-            } else if (FilterBindingConfig.GET_REQUEST_TYPE.equals(config.getRequestType())) {
-                response = new WSSResponse(httpResponse);
-                simpleGetHandler.handleRequest(request, response);
-            } else if (FilterBindingConfig.RESOURCES_REQUEST_TYPE.equals(config.getRequestType())) {
-                resourcesHandler.handleResource(httpRequest, httpResponse);
-                return;
-            } else if (FilterBindingConfig.FAKEWS_REQUEST_TYPE.equals(config.getRequestType())) {
-                FakeWSRequest wsRequest = new FakeWSRequest(httpRequest, config.getSiteName());
-                request = wsRequest;
-                response = new WSSResponse(httpResponse);
-                FakeWSRouter.handleFakeWSRequest(wsRequest, response, config);
-            }
-
-            if (response==null) {
-                log.error("no response was created by WSS call handling");
-                throw new ServletException("WSSResponse is not set");
-            } else {
-                response.processIfNeeded();
-            }
-
-            backend.saveChanges();
+        if (FilterBindingConfig.FP_REQUEST_TYPE.equals(config.getRequestType())) {
+            FPRPCRequest fpRequest = new FPRPCRequest(httpRequest, config.getSiteName());
+            request = fpRequest;
+            response = new FPRPCResponse(httpResponse);
+            FPRPCRouter.handleFPRCPRequest(fpRequest, (FPRPCResponse) response, config);
+        } else if (FilterBindingConfig.GET_REQUEST_TYPE.equals(config.getRequestType())) {
+            response = new WSSResponse(httpResponse);
+            simpleGetHandler.handleRequest(request, response);
+        } else if (FilterBindingConfig.RESOURCES_REQUEST_TYPE.equals(config.getRequestType())) {
+            resourcesHandler.handleResource(httpRequest, httpResponse);
+            return;
+        } else if (FilterBindingConfig.FAKEWS_REQUEST_TYPE.equals(config.getRequestType())) {
+            FakeWSRequest wsRequest = new FakeWSRequest(httpRequest, config.getSiteName());
+            request = wsRequest;
+            response = new WSSResponse(httpResponse);
+            FakeWSRouter.handleFakeWSRequest(wsRequest, response, config);
         }
-        catch (Throwable t) {
-                backend.discardChanges();
-            log.error("Error during WSS call processing", t);
-            throw new WSSException("Error while processing WSS request", t);
+
+        if (response == null) {
+            log.error("no response was created by WSS call handling");
+            throw new ServletException("WSSResponse is not set");
+        } else {
+            response.processIfNeeded();
         }
     }
 

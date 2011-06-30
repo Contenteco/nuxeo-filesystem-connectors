@@ -56,7 +56,6 @@ public class FakeDWS implements FakeWSHandler {
 
         response.addRenderingParameter("siteRoot", request.getSitePath());
         response.addRenderingParameter("request", request);
-
         if ("http://schemas.microsoft.com/sharepoint/soap/dws/GetDwsMetaData".equals(request.getAction())
                 || "http://schemas.microsoft.com/sharepoint/soap/dws/GetDwsData".equals(request.getAction())) {
 
@@ -174,9 +173,14 @@ public class FakeDWS implements FakeWSHandler {
                 folderName = documentUrl;
                 targetPath = siteRoot;
             }
-
             WSSBackend backend = Backend.get(request);
-            backend.createFolder(targetPath, folderName);
+            try {
+                backend.createFolder(targetPath, folderName);
+                backend.saveChanges();
+            } catch (Exception e) {
+                backend.discardChanges();
+                throw new WSSException("Can't create folder. ParentPath:" + targetPath + " folderName:" + folderName, e);
+            }
 
             response.setRenderingTemplateName("CreateFolderResponse.ftl");
         } else {
