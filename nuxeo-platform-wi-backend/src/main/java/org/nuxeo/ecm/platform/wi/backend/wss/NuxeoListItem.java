@@ -216,6 +216,7 @@ public class NuxeoListItem extends AbstractWSSListItem implements WSSListItem {
     @Override
     public String getSubPath() {
 
+        //@TODO: move url generation functionality to backend. WSSListItem should not know about corePathPrefix
         String path = doc.getPathAsString();
         if (corePathPrefix != null) {
             path = path.replace(corePathPrefix, "");

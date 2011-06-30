@@ -28,6 +28,7 @@ import org.nuxeo.common.utils.Path;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.platform.wi.backend.Backend;
+import org.nuxeo.ecm.webdav.backend.VirtualNode;
 import org.nuxeo.wss.WSSException;
 import org.nuxeo.wss.servlet.WSSRequest;
 import org.nuxeo.wss.spi.WSSBackend;
@@ -128,7 +129,11 @@ public class WSSRootBackendAdapter extends WSSBackendAdapter {
             return new WSSFakeBackend();
         }
         try {
-            Set<String> names = new HashSet<String>(this.backend.getVirtualFolderNames());
+            List<VirtualNode> nodes = this.backend.getVirtualNodes();
+            Set<String> names = new HashSet<String>();
+            for(VirtualNode node : nodes){
+                names.add(node.getName());
+            }
             Path locationPath = new Path(location);
             String[] segments = locationPath.segments();
             int removeSegments = 0;

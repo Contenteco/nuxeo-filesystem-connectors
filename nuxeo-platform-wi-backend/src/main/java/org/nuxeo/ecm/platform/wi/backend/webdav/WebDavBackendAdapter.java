@@ -22,6 +22,7 @@ import org.apache.commons.logging.LogFactory;
 import org.nuxeo.common.utils.Path;
 import org.nuxeo.ecm.core.api.*;
 import org.nuxeo.ecm.platform.wi.backend.Backend;
+import org.nuxeo.ecm.webdav.backend.VirtualNode;
 import org.nuxeo.ecm.webdav.backend.WebDavBackend;
 
 import java.util.LinkedList;
@@ -78,25 +79,19 @@ public class WebDavBackendAdapter implements WebDavBackend {
     }
 
     @Override
-    public DocumentModel resolveLocation(String location)
+    public boolean removeItem(String location) throws ClientException {
+        return backend.removeItem(location);
+    }
+
+    @Override
+    public boolean removeItem(DocumentRef ref) throws ClientException {
+        return backend.removeItem(ref);
+    }
+
+    @Override
+    public boolean renameItem(DocumentModel source, String destinationName)
             throws ClientException {
-        return backend.resolveLocation(location);
-    }
-
-    @Override
-    public void removeItem(String location) throws ClientException {
-        backend.removeItem(location);
-    }
-
-    @Override
-    public void removeItem(DocumentRef ref) throws ClientException {
-        backend.removeItem(ref);
-    }
-
-    @Override
-    public void renameItem(DocumentModel source, String destinationName)
-            throws ClientException {
-        backend.renameItem(source, destinationName);
+        return backend.renameItem(source, destinationName);
     }
 
     @Override
@@ -162,8 +157,8 @@ public class WebDavBackendAdapter implements WebDavBackend {
     }
 
     @Override
-    public LinkedList<String> getVirtualFolderNames() throws ClientException {
-        return backend.getVirtualFolderNames();
+    public LinkedList<VirtualNode> getVirtualNodes() throws ClientException {
+        return backend.getVirtualNodes();
     }
 
     @Override

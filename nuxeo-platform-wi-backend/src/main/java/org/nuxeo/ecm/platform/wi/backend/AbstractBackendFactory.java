@@ -22,6 +22,7 @@ import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.CoreSession;
+import org.nuxeo.ecm.platform.wi.filter.SessionCacheHolder;
 import org.nuxeo.ecm.platform.wi.filter.WIRequestFilter;
 import org.nuxeo.ecm.platform.wi.filter.WISession;
 import org.nuxeo.ecm.webengine.jaxrs.context.RequestCleanupHandler;
@@ -42,6 +43,10 @@ public abstract class AbstractBackendFactory implements BackendFactory {
         final Backend backend;
         if (request != null) {
             WISession wiSession = (WISession) request.getAttribute(WIRequestFilter.SESSION_KEY);
+            if (wiSession == null) {
+                wiSession = SessionCacheHolder.getInstance().getCache().get(request);
+                request.setAttribute(WIRequestFilter.SESSION_KEY, wiSession);
+            }
             backend = getBackend(wiSession);
             // register a backend cleanup handler
             RequestContext.getActiveContext(request).addRequestCleanupHandler(
@@ -66,6 +71,10 @@ public abstract class AbstractBackendFactory implements BackendFactory {
             if (sessionBackend != null) {
                 backend = (Backend) sessionBackend;
             }
+        }
+
+        if(backend != null && !backend.isSessionAlive()) {
+            backend = null;
         }
 
         if (backend == null) {

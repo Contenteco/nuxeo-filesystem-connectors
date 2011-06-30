@@ -34,6 +34,9 @@ import org.nuxeo.ecm.core.api.blobholder.BlobHolder;
 import org.nuxeo.ecm.core.api.ClientRuntimeException;
 import org.nuxeo.ecm.core.schema.FacetNames;
 import org.nuxeo.ecm.core.trash.TrashService;
+import org.nuxeo.ecm.platform.wi.backend.node.VirtualFileNode;
+import org.nuxeo.ecm.platform.wi.backend.node.VirtualFolderNode;
+import org.nuxeo.ecm.webdav.backend.VirtualNode;
 import org.nuxeo.runtime.api.Framework;
 
 import java.io.UnsupportedEncodingException;
@@ -60,10 +63,10 @@ public class SimpleBackend extends AbstractCoreBackend {
 
     protected PathCache pathCache;
 
-    protected LinkedList<String> orderedBackendNames;
+    protected LinkedList<VirtualNode> orderedBackendNames;
 
     protected SimpleBackend(String backendDisplayName, String rootPath,
-            String rootUrl, CoreSession session) {
+                            String rootUrl, CoreSession session) {
         super(session);
         this.backendDisplayName = backendDisplayName;
         this.rootPath = rootPath;
@@ -71,7 +74,7 @@ public class SimpleBackend extends AbstractCoreBackend {
     }
 
     protected SimpleBackend(String backendDisplayName, String rootPath,
-            String rootUrl) {
+                            String rootUrl) {
         this(backendDisplayName, rootPath, rootUrl, null);
     }
 
@@ -129,7 +132,7 @@ public class SimpleBackend extends AbstractCoreBackend {
 
     @Override
     public DocumentModel updateDocument(DocumentModel doc, String name,
-            Blob content) throws ClientException {
+                                        Blob content) throws ClientException {
         doc.getProperty("file:content").setValue(content);
         doc.getProperty("file:filename").setValue(name);
         getSession().saveDocument(doc);
@@ -138,13 +141,33 @@ public class SimpleBackend extends AbstractCoreBackend {
     }
 
     @Override
-    public LinkedList<String> getVirtualFolderNames() throws ClientException {
-        if(orderedBackendNames == null){
+    public LinkedList<VirtualNode> getVirtualNodes() throws ClientException {
+        if (orderedBackendNames == null) {
             List<DocumentModel> children = getChildren(new PathRef(rootPath));
-            orderedBackendNames = new LinkedList<String>();
-            if(children != null){
-                for(DocumentModel model : children){
-                    orderedBackendNames.add(model.getName());
+            orderedBackendNames = new LinkedList<VirtualNode>();
+            if (children != null) {
+                for (DocumentModel model : children) {
+                    String displayedName = model.getName();
+                    try {
+                        displayedName = URIUtil.encodePath(getDisplayName(model));
+                    } catch (URIException e) {
+                        //nothing
+                    }
+                    if (model.isFolder()) {
+                        orderedBackendNames.add(new VirtualFolderNode(displayedName));
+                    } else {
+                        Blob blob = (Blob) model.getPropertyValue("file:content");
+                        String mimeType = "application/octet-stream";
+                        long size = 0;
+                        if (blob != null) {
+                            size = blob.getLength();
+                            mimeType = blob.getMimeType();
+                        }
+                        if (StringUtils.isEmpty(mimeType) || "???".equals(mimeType)) {
+                            mimeType = "application/octet-stream";
+                        }
+                        orderedBackendNames.add(new VirtualFileNode(displayedName, size, mimeType));
+                    }
                 }
             }
         }
@@ -169,6 +192,9 @@ public class SimpleBackend extends AbstractCoreBackend {
     @Override
     public DocumentModel resolveLocation(String location)
             throws ClientException {
+        if (StringUtils.isEmpty(location)) {
+            return getSession().getDocument(new PathRef(this.rootPath));
+        }
         Path resolvedLocation = parseLocation(location);
 
         DocumentModel doc = null;
@@ -203,7 +229,8 @@ public class SimpleBackend extends AbstractCoreBackend {
                 // look for a child
                 DocumentModel parentDocument = resolveParent(parentLocation.toString());
                 if (parentDocument == null) {
-                    log.warn("Unable to find parent for item " + location);
+                    log.warn("Unable to find parent for item " + location
+                            + " Resolved location:" + resolvedLocation.toString());
                     throw new ClientRuntimeException("Unable to find parent for item "
                             + location);
                 }
@@ -288,13 +315,14 @@ public class SimpleBackend extends AbstractCoreBackend {
         Path urlLocation = new Path(location);
         Path cutLocation = urlLocation.removeFirstSegments(rootUrlPath.segmentCount());
         finalLocation = finalLocation.append(cutLocation);
+        //@TODO: is this strings really need?
         String fileName = finalLocation.lastSegment();
         String parentPath = finalLocation.removeLastSegments(1).toString();
         return new Path(parentPath).append(fileName);
     }
 
     @Override
-    public void removeItem(String location) throws ClientException {
+    public boolean removeItem(String location) throws ClientException {
         DocumentModel docToRemove = null;
         try {
             docToRemove = resolveLocation(location);
@@ -304,19 +332,21 @@ public class SimpleBackend extends AbstractCoreBackend {
         if (docToRemove == null) {
             throw new ClientException("Document path not found");
         }
-        removeItem(docToRemove.getRef());
+        return removeItem(docToRemove.getRef());
     }
 
     @Override
-    public void removeItem(DocumentRef ref) throws ClientException {
+    public boolean removeItem(DocumentRef ref) throws ClientException {
         try {
             DocumentModel doc = getSession().getDocument(ref);
             if (doc != null) {
                 getTrashService().trashDocuments(Arrays.asList(doc));
                 getPathCache().remove(doc.getPathAsString());
+                return true;
             } else {
                 log.warn("Can't move document " + ref.toString()
                         + " to trash. Document did not found.");
+                return false;
             }
         } catch (Exception e) {
             throw new ClientException("Error while deleting doc " + ref, e);
@@ -332,7 +362,7 @@ public class SimpleBackend extends AbstractCoreBackend {
     }
 
     @Override
-    public void renameItem(DocumentModel source, String destinationName)
+    public boolean renameItem(DocumentModel source, String destinationName)
             throws ClientException {
         if (source.isFolder()) {
             source.setPropertyValue("dc:title", destinationName);
@@ -361,17 +391,18 @@ public class SimpleBackend extends AbstractCoreBackend {
                 moveItem(source, source.getParentRef(), destinationName);
             }
         }
+        return true;
     }
 
     @Override
-    public DocumentModel moveItem(DocumentModel source, PathRef targetParentRef)
+    public DocumentModel moveItem(DocumentModel source, DocumentRef targetParentRef)
             throws ClientException {
         return moveItem(source, targetParentRef, source.getName());
     }
 
     @Override
     public DocumentModel moveItem(DocumentModel source,
-            DocumentRef targetParentRef, String name) throws ClientException {
+                                  DocumentRef targetParentRef, String name) throws ClientException {
         try {
             cleanTrashPath(targetParentRef, name);
             DocumentModel model = getSession().move(source.getRef(),
@@ -388,7 +419,7 @@ public class SimpleBackend extends AbstractCoreBackend {
     }
 
     @Override
-    public DocumentModel copyItem(DocumentModel source, PathRef targetParentRef)
+    public DocumentModel copyItem(DocumentModel source, DocumentRef targetParentRef)
             throws ClientException {
         try {
             DocumentModel model = getSession().copy(source.getRef(),
@@ -416,7 +447,6 @@ public class SimpleBackend extends AbstractCoreBackend {
         if ("WorkspaceRoot".equals(parent.getType())) {
             targetType = "Workspace";
         }
-        // name = cleanName(name);
         try {
             cleanTrashPath(parent, name);
             DocumentModel folder = getSession().createDocumentModel(
@@ -441,7 +471,6 @@ public class SimpleBackend extends AbstractCoreBackend {
         }
 
         String targetType = "File";
-        // name = cleanName(name);
         try {
             cleanTrashPath(parent, name);
             DocumentModel file = getSession().createDocumentModel(
@@ -468,6 +497,9 @@ public class SimpleBackend extends AbstractCoreBackend {
 
     @Override
     public String getDisplayName(DocumentModel doc) {
+        if(this.rootPath.equals(doc.getPathAsString())){
+            return getBackendDisplayName();
+        }
         if (doc.isFolder()) {
             return doc.getName();
         } else {

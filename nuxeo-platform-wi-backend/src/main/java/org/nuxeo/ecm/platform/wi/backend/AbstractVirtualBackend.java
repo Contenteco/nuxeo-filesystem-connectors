@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.httpclient.URIException;
+import org.apache.commons.httpclient.util.URIUtil;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -33,6 +35,9 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.PathRef;
+import org.nuxeo.ecm.platform.wi.backend.node.VirtualFileNode;
+import org.nuxeo.ecm.platform.wi.backend.node.VirtualFolderNode;
+import org.nuxeo.ecm.webdav.backend.VirtualNode;
 
 public abstract class AbstractVirtualBackend extends AbstractCoreBackend
         implements VirtualBackend {
@@ -50,12 +55,12 @@ public abstract class AbstractVirtualBackend extends AbstractCoreBackend
     private RealBackendFactory realBackendFactory;
 
     protected AbstractVirtualBackend(String name, String rootUrl,
-            RealBackendFactory realBackendFactory) {
+                                     RealBackendFactory realBackendFactory) {
         this(name, rootUrl, null, realBackendFactory);
     }
 
     protected AbstractVirtualBackend(String name, String rootUrl,
-            CoreSession session, RealBackendFactory realBackendFactory) {
+                                     CoreSession session, RealBackendFactory realBackendFactory) {
         super(session);
         this.backendDisplayName = name;
         this.rootUrl = new Path(rootUrl).append(this.backendDisplayName).toString();
@@ -134,12 +139,40 @@ public abstract class AbstractVirtualBackend extends AbstractCoreBackend
     }
 
     @Override
-    public LinkedList<String> getVirtualFolderNames() throws ClientException {
+    public LinkedList<VirtualNode> getVirtualNodes() throws ClientException {
         initIfNeed();
         if (orderedBackendNames == null) {
-            return new LinkedList<String>();
+            return new LinkedList<VirtualNode>();
         }
-        return orderedBackendNames;
+        LinkedList<VirtualNode> list = new LinkedList<VirtualNode>();
+        for (String name : orderedBackendNames) {
+            Backend backend = backendMap.get(name);
+            if (backend != null) {
+                if (backend.isVirtual()) {
+                    list.add(new VirtualFolderNode(name));
+                } else {
+                    DocumentModel model = backend.resolveLocation(null);
+                    if (model != null) {
+                        if (model.isFolder()) {
+                            list.add(new VirtualFolderNode(name));
+                        } else {
+                            Blob blob = (Blob) model.getPropertyValue("file:content");
+                            String mimeType = "application/octet-stream";
+                            long size = 0;
+                            if (blob != null) {
+                                size = blob.getLength();
+                                mimeType = blob.getMimeType();
+                            }
+                            if (StringUtils.isEmpty(mimeType) || "???".equals(mimeType)) {
+                                mimeType = "application/octet-stream";
+                            }
+                            list.add(new VirtualFileNode(name, size, mimeType));
+                        }
+                    }
+                }
+            }
+        }
+        return list;
     }
 
     protected void registerBackend(Backend backend) {
@@ -243,29 +276,29 @@ public abstract class AbstractVirtualBackend extends AbstractCoreBackend
     }
 
     @Override
-    public void removeItem(String location) throws ClientException {
+    public boolean removeItem(String location) throws ClientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void removeItem(DocumentRef ref) throws ClientException {
+    public boolean removeItem(DocumentRef ref) throws ClientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void renameItem(DocumentModel source, String destinationName)
+    public boolean renameItem(DocumentModel source, String destinationName)
             throws ClientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public DocumentModel moveItem(DocumentModel source, PathRef targetParentRef)
+    public DocumentModel moveItem(DocumentModel source, DocumentRef targetParentRef)
             throws ClientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public DocumentModel copyItem(DocumentModel source, PathRef targetParentRef)
+    public DocumentModel copyItem(DocumentModel source, DocumentRef targetParentRef)
             throws ClientException {
         throw new UnsupportedOperationException();
     }
@@ -301,7 +334,7 @@ public abstract class AbstractVirtualBackend extends AbstractCoreBackend
 
     @Override
     public boolean exists(String location) {
-        throw new UnsupportedOperationException();
+        return true;
     }
 
     @Override
@@ -322,13 +355,13 @@ public abstract class AbstractVirtualBackend extends AbstractCoreBackend
 
     @Override
     public DocumentModel updateDocument(DocumentModel doc, String name,
-            Blob content) throws ClientException {
+                                        Blob content) throws ClientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public DocumentModel moveItem(DocumentModel source,
-            DocumentRef targetParentRef, String name) throws ClientException {
+                                  DocumentRef targetParentRef, String name) throws ClientException {
         throw new UnsupportedOperationException();
     }
 

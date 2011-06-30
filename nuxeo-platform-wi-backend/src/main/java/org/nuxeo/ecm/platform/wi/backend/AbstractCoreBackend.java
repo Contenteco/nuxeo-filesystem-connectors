@@ -17,13 +17,18 @@
  */
 package org.nuxeo.ecm.platform.wi.backend;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.ClientException;
+import org.nuxeo.ecm.core.api.ClientRuntimeException;
 import org.nuxeo.ecm.core.api.CoreInstance;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.repository.RepositoryManager;
 import org.nuxeo.runtime.api.Framework;
 
 public abstract class AbstractCoreBackend implements Backend {
+
+    private static final Log log = LogFactory.getLog(AbstractCoreBackend.class);
 
     protected CoreSession session;
 
@@ -35,34 +40,24 @@ public abstract class AbstractCoreBackend implements Backend {
         this.session = session;
     }
 
-    /*
-     * public void begin() throws ClientException { if
-     * (!TransactionHelper.isTransactionActiveOrMarkedRollback()) {
-     * TransactionHelper.startTransaction(); } }
-     */
-
     @Override
-    public CoreSession getSession() throws ClientException {
+    public CoreSession getSession() {
         return getSession(false);
     }
 
     @Override
-    public CoreSession getSession(boolean synchronize) throws ClientException {
+    public CoreSession getSession(boolean synchronize) {
         try {
-
             if (session == null) {
                 RepositoryManager rm;
                 rm = Framework.getService(RepositoryManager.class);
                 session = rm.getDefaultRepository().open();
-            } else {
+            }
+            if (synchronize) {
                 session.save();
             }
-
         } catch (Exception e) {
-            throw new ClientException("Error while getting session", e);
-        }
-        if (synchronize) {
-            session.save();
+            throw new ClientRuntimeException("Error while getting session", e);
         }
         return session;
     }
@@ -70,6 +65,16 @@ public abstract class AbstractCoreBackend implements Backend {
     @Override
     public void setSession(CoreSession session) {
         this.session = session;
+    }
+
+    @Override
+    public boolean isSessionAlive() {
+        try {
+            getSession().getPrincipal();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override

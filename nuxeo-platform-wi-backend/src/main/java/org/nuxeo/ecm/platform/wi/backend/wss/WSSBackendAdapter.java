@@ -22,6 +22,8 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.nuxeo.common.utils.Path;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
@@ -45,6 +47,8 @@ import org.nuxeo.wss.spi.dws.User;
 import org.nuxeo.wss.spi.dws.UserImpl;
 
 public class WSSBackendAdapter extends AbstractWSSBackend {
+
+    private static final Log log = LogFactory.getLog(WSSBackendAdapter.class);
 
     protected String corePathPrefix;
 
@@ -302,7 +306,7 @@ public class WSSBackendAdapter extends AbstractWSSBackend {
     }
 
     private VirtualListItem createItem(String name) {
-        return new VirtualListItem(name, corePathPrefix, urlRoot);
+        return new VirtualListItem(name, urlRoot);
     }
 
     private WSSListItemFactory getItemFactory() {

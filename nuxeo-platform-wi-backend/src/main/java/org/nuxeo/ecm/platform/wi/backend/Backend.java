@@ -23,6 +23,7 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.PathRef;
+import org.nuxeo.ecm.webdav.backend.VirtualNode;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -33,11 +34,13 @@ public interface Backend {
 
     String getRootUrl();
 
-    CoreSession getSession() throws ClientException;
+    CoreSession getSession();
 
     void setSession(CoreSession session);
 
-    CoreSession getSession(boolean synchronize) throws ClientException;
+    CoreSession getSession(boolean synchronize);
+
+    boolean isSessionAlive();
 
     String getBackendDisplayName();
 
@@ -59,20 +62,20 @@ public interface Backend {
 
     DocumentModel resolveLocation(String location) throws ClientException;
 
-    void removeItem(String location) throws ClientException;
+    boolean removeItem(String location) throws ClientException;
 
-    void removeItem(DocumentRef ref) throws ClientException;
+    boolean removeItem(DocumentRef ref) throws ClientException;
 
-    void renameItem(DocumentModel source, String destinationName) throws ClientException;
+    boolean renameItem(DocumentModel source, String destinationName) throws ClientException;
 
-    DocumentModel moveItem(DocumentModel source, PathRef targetParentRef) throws ClientException;
+    DocumentModel moveItem(DocumentModel source, DocumentRef targetParentRef) throws ClientException;
 
     DocumentModel moveItem(DocumentModel source, DocumentRef targetParentRef, String name)
             throws ClientException;
 
     DocumentModel updateDocument(DocumentModel doc, String name, Blob content) throws ClientException;
 
-    DocumentModel copyItem(DocumentModel source, PathRef targetParentRef) throws ClientException;
+    DocumentModel copyItem(DocumentModel source, DocumentRef targetParentRef) throws ClientException;
 
     DocumentModel createFolder(String parentPath, String name) throws ClientException;
 
@@ -90,7 +93,7 @@ public interface Backend {
 
     String getDisplayName(DocumentModel doc);
 
-    LinkedList<String> getVirtualFolderNames() throws ClientException;
+    LinkedList<VirtualNode> getVirtualNodes() throws ClientException;
 
     Backend getBackend(String path);
 

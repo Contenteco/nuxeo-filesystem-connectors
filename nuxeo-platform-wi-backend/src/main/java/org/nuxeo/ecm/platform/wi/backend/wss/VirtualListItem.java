@@ -29,13 +29,10 @@ public class VirtualListItem extends AbstractWSSListItem implements WSSListItem 
 
     protected String name;
 
-    protected String corePathPrefix;
-
     protected String urlRoot;
 
-    public VirtualListItem(String name, String corePathPrefix, String urlRoot) {
+    public VirtualListItem(String name, String urlRoot) {
         this.name = name;
-        this.corePathPrefix = corePathPrefix;
         this.urlRoot = urlRoot;
     }
 
