@@ -60,6 +60,8 @@ public abstract class BaseWSSFilter implements Filter {
 
     public static final int NUXEO_ROOT_URL_LEN = NUXEO_ROOT_URL.length();
 
+    public static final String WEBDAV_CALL = "WebDAVCall";
+
     private static final Log log = LogFactory.getLog(WSSFrontFilter.class);
 
     @Override
@@ -69,70 +71,85 @@ public abstract class BaseWSSFilter implements Filter {
         if (request instanceof HttpServletRequest) {
             HttpServletRequest httpRequest = (HttpServletRequest) request;
             HttpServletResponse httpResponse = (HttpServletResponse) response;
-            String uri = httpRequest.getRequestURI();
 
-            if (isRootFilter()) {
-                String forward = httpRequest.getParameter(WSSFORWARD_KEY);
-                if (forward != null) {
-                    httpResponse.sendRedirect(forward);
-                    return;
-                }
-            }
-
-            // check WebDAV calls
+            long enterTime = System.currentTimeMillis();
             try {
-                if (isWebDavRequest(httpRequest)
-                        && !uri.startsWith(NUXEO_ROOT_URL + webDavUrl)) {
-                    handleWebDavCall(httpRequest, httpResponse);
-                    return;
-                }
-            } catch (Exception e) {
-                throw new ServletException("error processing request", e);
-            }
-
-            // let back filter do the job if any
-            if (isRootFilter() && uri.startsWith(getRootFilterTarget())) {
-                log.debug("Let WSS request to back filter");
-                chain.doFilter(request, response);
-                return;
-            }
-
-            Object forwardedConfig = httpRequest.getAttribute(FILTER_FORWARD_PARAM);
-
-            if (forwardedConfig != null) {
-                try {
-                    handleForwardedCall(httpRequest, httpResponse,
-                            (FilterBindingConfig) forwardedConfig);
-                } catch (Exception e) {
-                    throw new ServletException("Error processing WSS request",
-                            e);
-                }
-            } else {
-                FilterBindingConfig config = null;
-                try {
-                    config = FilterBindingResolver.getBinding(httpRequest);
-                } catch (Exception e) {
-                    throw new ServletException("Error processing WSS request",
-                            e);
-                }
-                if (config != null) {
-                    try {
-                        if (isRootFilter()) {
-                            log.debug("Forward call to backend filter");
-                            httpRequest.setAttribute(FILTER_FORWARD_PARAM,
-                                    config);
-                            doForward(httpRequest, httpResponse, config);
-                        } else {
-                            handleWSSCall(httpRequest, httpResponse, config);
-                        }
-                    } catch (Exception e) {
-                        throw new ServletException(
-                                "Error processing WSS request", e);
-                    }
-                    return;
-                } else {
-                    // NOT a WSS request
+                Object isWebDAVCall = httpRequest.getAttribute(WEBDAV_CALL);
+                if(isWebDAVCall != null && (Boolean)isWebDAVCall){
                     chain.doFilter(request, response);
+                    return;
+                }
+
+                String uri = httpRequest.getRequestURI();
+
+                if (isRootFilter()) {
+                    String forward = httpRequest.getParameter(WSSFORWARD_KEY);
+                    if (forward != null) {
+                        httpResponse.sendRedirect(forward);
+                        return;
+                    }
+                }
+
+                // check WebDAV calls
+                try {
+                    if (isWebDavRequest(httpRequest)
+                            && !uri.startsWith(NUXEO_ROOT_URL + webDavUrl)) {
+                        handleWebDavCall(httpRequest, httpResponse);
+                        return;
+                    }
+                } catch (Exception e) {
+                    throw new ServletException("error processing request", e);
+                }
+
+                // let back filter do the job if any
+                if (isRootFilter() && uri.startsWith(getRootFilterTarget())) {
+                    log.debug("Let WSS request to back filter");
+                    chain.doFilter(request, response);
+                    return;
+                }
+
+                Object forwardedConfig = httpRequest.getAttribute(FILTER_FORWARD_PARAM);
+
+                if (forwardedConfig != null) {
+                    try {
+                        handleForwardedCall(httpRequest, httpResponse,
+                                (FilterBindingConfig) forwardedConfig);
+                    } catch (Exception e) {
+                        throw new ServletException("Error processing WSS request",
+                                e);
+                    }
+                } else {
+                    FilterBindingConfig config = null;
+                    try {
+                        config = FilterBindingResolver.getBinding(httpRequest);
+                    } catch (Exception e) {
+                        throw new ServletException("Error processing WSS request",
+                                e);
+                    }
+                    if (config != null) {
+                        try {
+                            if (isRootFilter()) {
+                                log.debug("Forward call to backend filter");
+                                httpRequest.setAttribute(FILTER_FORWARD_PARAM,
+                                        config);
+                                doForward(httpRequest, httpResponse, config);
+                            } else {
+                                handleWSSCall(httpRequest, httpResponse, config);
+                            }
+                        } catch (Exception e) {
+                            throw new ServletException(
+                                    "Error processing WSS request", e);
+                        }
+                        return;
+                    } else {
+                        // NOT a WSS request
+                        chain.doFilter(request, response);
+                    }
+                }
+            } finally {
+                if (log.isDebugEnabled()) {
+                    log.debug(httpRequest.getMethod() + " " + httpRequest.getRequestURI()
+                        + " time:" + (System.currentTimeMillis() - enterTime) + "ms.");
                 }
             }
         }
@@ -190,6 +207,7 @@ public abstract class BaseWSSFilter implements Filter {
         // forward request to WebDAV
         String createdURL = createPathToWebDav(httpRequest.getRequestURI());
         RequestDispatcher dispatcher = ctx.getRequestDispatcher(createdURL);
+        httpRequest.setAttribute(WEBDAV_CALL, true);
         dispatcher.forward(httpRequest, httpResponse);
     }
 
@@ -208,13 +226,14 @@ public abstract class BaseWSSFilter implements Filter {
     private boolean isWebDavRequest(HttpServletRequest request) {
         String ua = request.getHeader("User-Agent");
         return StringUtils.isNotEmpty(ua)
-                && (ua.contains(FPRPCConts.MS_WEBDAV_USERAGENT));
-        // || ua.contains(FPRPCConts.MAC_FINDER_USERAGENT));
+                && (ua.contains(FPRPCConts.MS_WEBDAV_USERAGENT) 
+                || ua.contains(FPRPCConts.MSOFFICE_USERAGENT));
     }
 
     private boolean isMSWebDavRequest(HttpServletRequest request) {
         String ua = request.getHeader("User-Agent");
-        return ua != null && ua.contains(FPRPCConts.MS_WEBDAV_USERAGENT);
+        return ua != null && (ua.contains(FPRPCConts.MS_WEBDAV_USERAGENT)
+                || ua.contains(FPRPCConts.MSOFFICE_USERAGENT));
     }
 
     // resolve destination path for WebDAV requests

@@ -45,6 +45,8 @@ public class WIRequestFilter implements Filter {
 
     public static String MSOFFICE_USERAGENT = "Microsoft Office Existence Discovery";
 
+    public static String MSFRONTPAGE_USERAGENT = "MSFrontPage";
+
     public static final String SESSION_KEY = "org.nuxeo.ecm.platform.wi.session";
 
     public static final String BACKEND_KEY = "org.nuxeo.ecm.platform.wi.backend";
@@ -110,6 +112,7 @@ public class WIRequestFilter implements Filter {
                 if (sessionSynched) {
                     simpleReleaseSyncOnSession(httpRequest);
                 }
+
                 if (log.isDebugEnabled()) {
                     log.debug(doFormatLogMessage(httpRequest,
                             "Exiting NuxeoRequestControler filter"));
@@ -117,7 +120,6 @@ public class WIRequestFilter implements Filter {
             }
         } else {
             chain.doFilter(request, response);
-            return;
         }
     }
 
@@ -128,7 +130,8 @@ public class WIRequestFilter implements Filter {
     private boolean isWIRequest(HttpServletRequest request) {
         String ua = request.getHeader("User-Agent");
         return StringUtils.isNotEmpty(ua)
-                && (ua.contains(WEBDAV_USERAGENT) || ua.contains(MSOFFICE_USERAGENT));
+                && (ua.contains(WEBDAV_USERAGENT) || ua.contains(MSOFFICE_USERAGENT)
+                || ua.contains(MSFRONTPAGE_USERAGENT));
     }
 
     protected boolean simpleSyncOnSession(HttpServletRequest request) {
