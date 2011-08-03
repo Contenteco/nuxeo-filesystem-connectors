@@ -34,6 +34,7 @@ import javax.ws.rs.WebApplicationException;
 
 import net.java.dev.webdav.jaxrs.methods.PROPFIND;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.Blob;
@@ -48,6 +49,8 @@ import org.nuxeo.ecm.webdav.backend.WebDavBackend;
 import com.sun.jersey.spi.CloseableService;
 
 import java.util.Arrays;
+import java.util.Enumeration;
+import java.util.List;
 
 @Path("dav")
 public class RootResource {
@@ -58,6 +61,9 @@ public class RootResource {
 
     private HttpServletRequest request;
 
+    private static final List<String> WIN_SYSTEM_FILES = Arrays.asList("Thumbs.db", "foo",
+            "wininet.dll", "msapsspc.dll", "schannel.dll", "msnsspc.dll", "digest.dll");
+
     public RootResource(@Context HttpServletRequest request)
             throws Exception {
         log.debug(request.getMethod() + " " + request.getRequestURI());
@@ -66,7 +72,7 @@ public class RootResource {
 
     @GET
     @Produces("text/html")
-    public Object getRoot(@Context UriInfo uriInfo) throws Exception {
+    public Object getRoot() throws Exception {
         Object resource = findResource("");
         if (resource instanceof FolderResource) {
             return ((FolderResource) resource).get();
@@ -76,7 +82,7 @@ public class RootResource {
     }
 
     @OPTIONS
-    public Object getRootOptions(@Context UriInfo uriInfo) throws Exception {
+    public Object getRootOptions() throws Exception {
         Object resource = findResource("");
         if (resource instanceof FolderResource) {
             return ((FolderResource) resource).options();
@@ -104,6 +110,10 @@ public class RootResource {
 
     private Object findResource(String path) throws Exception {
         path = new String(path.getBytes(), "UTF-8");
+
+        if(isWinSystemFile(path)){
+            throw new WebApplicationException(Response.Status.NOT_FOUND);
+        }
 
         WebDavBackend backend = Backend.get(path, request);
 
@@ -162,6 +172,14 @@ public class RootResource {
             }
             return String.valueOf(source.getPropertyValue("dc:title"));
         }
+    }
+
+    private boolean isWinSystemFile(String path){
+        if(StringUtils.isEmpty(path)){
+            return false;
+        }
+        String lastSegment = new org.nuxeo.common.utils.Path(path).lastSegment();
+        return WIN_SYSTEM_FILES.contains(lastSegment);
     }
 
 }
