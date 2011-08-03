@@ -131,7 +131,7 @@ public class UnknownResource extends AbstractResource {
 
     @HEAD
     public Response head() {
-        throw new WebApplicationException(Response.Status.NOT_FOUND);
+        return Response.status(Response.Status.NOT_FOUND).build();
     }
 
     // Utility

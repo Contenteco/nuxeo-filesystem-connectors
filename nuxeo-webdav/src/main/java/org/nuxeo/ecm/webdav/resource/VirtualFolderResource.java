@@ -191,7 +191,7 @@ public class VirtualFolderResource extends AbstractResource {
 
     @HEAD
     public Response head() {
-        return Response.status(404).build();
+        return Response.status(200).build();
     }
 
     @LOCK
